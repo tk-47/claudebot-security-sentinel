@@ -26,6 +26,16 @@ It runs 60–80+ automated checks across your entire stack in seconds: VPS harde
 
 ## Quick Start
 
+### Interactive Setup (Claude Code)
+
+Open this repo in [Claude Code](https://claude.com/claude-code) and say:
+
+> "Set up Security Sentinel for my infrastructure"
+
+Claude will walk you through configuration step by step — gathering your VPS details, creating your `.env`, verifying tool installation, and running your first scan.
+
+### Manual Setup
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/tk-47/claudebot-security-sentinel.git
