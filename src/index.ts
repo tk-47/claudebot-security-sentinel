@@ -221,6 +221,91 @@ function formatTelegramAlert(report: ScanReport & { mode: string }, diff: ScanDi
   return lines.join("\n");
 }
 
+/**
+ * Compact Telegram summary for interactive scan commands.
+ * Shows pass/fail counts, critical/high findings, and compliance status.
+ * Full report is saved to logs/security/ for detailed review.
+ */
+function formatCompactTelegram(
+  report: ScanReport & { mode: string },
+  diff: ScanDiff,
+  reportFilename: string,
+  aiSummary?: string
+): string {
+  const lines: string[] = [];
+  const ts = new Date(report.timestamp).toLocaleString("en-US", {
+    timeZone: TIMEZONE,
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
+  const criticals = report.results.filter((r) => !r.pass && r.severity === "critical");
+  const highs = report.results.filter((r) => !r.pass && r.severity === "high");
+  const mediums = report.results.filter((r) => !r.pass && r.severity === "medium");
+
+  // Header
+  const modeLabel = report.mode === "deep" ? "Deep Scan" : report.mode === "scan" ? "Quick Scan" : `${report.mode} scan`;
+  lines.push(`🔒 <b>Security ${modeLabel}</b> — ${ts}`);
+  lines.push(`${(report.duration_ms / 1000).toFixed(1)}s | ${report.total} checks | <b>${report.passed} passed</b> | <b>${report.failed} failed</b>`);
+
+  // Status emoji
+  if (criticals.length > 0) {
+    lines.push("");
+    lines.push(`🔴 <b>${criticals.length} CRITICAL</b>`);
+    for (const f of criticals) {
+      lines.push(`  • ${f.name}`);
+    }
+  }
+
+  if (highs.length > 0) {
+    lines.push("");
+    lines.push(`🟠 <b>${highs.length} HIGH</b>`);
+    for (const f of highs) {
+      lines.push(`  • ${f.name}`);
+    }
+  }
+
+  if (mediums.length > 0) {
+    lines.push("");
+    lines.push(`🟡 ${mediums.length} medium`);
+  }
+
+  // Changes
+  if (diff.new_failures.length > 0) {
+    lines.push("");
+    lines.push(`⚠️ <b>${diff.new_failures.length} new failure(s)</b> since last scan`);
+  }
+  if (diff.resolved.length > 0) {
+    lines.push(`✅ ${diff.resolved.length} resolved`);
+  }
+
+  // Compliance one-liner
+  const cs = report.compliance_summary;
+  const compParts: string[] = [];
+  if (cs.SOC2.status !== "pass") compParts.push(`SOC2:${cs.SOC2.status}`);
+  if (cs.HIPAA.status !== "pass") compParts.push(`HIPAA:${cs.HIPAA.status}`);
+  if (cs["PCI-DSS"].status !== "pass") compParts.push(`PCI:${cs["PCI-DSS"].status}`);
+  if (compParts.length > 0) {
+    lines.push("");
+    lines.push(`📋 Compliance: ${compParts.join(" | ")}`);
+  } else {
+    lines.push("");
+    lines.push("📋 Compliance: all clear");
+  }
+
+  // AI summary snippet (first 2 sentences only)
+  if (aiSummary) {
+    const sentences = aiSummary.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
+    lines.push("");
+    lines.push(`🤖 ${sentences}`);
+  }
+
+  // Footer
+  lines.push("");
+  lines.push(`📄 Full report: logs/security/${reportFilename}`);
+
+  return lines.join("\n");
+}
+
 // ============================================================
 // TELEGRAM NOTIFICATION
 // ============================================================
@@ -421,7 +506,16 @@ function checkInstall() {
 // MAIN
 // ============================================================
 
-export async function runSecurityScan(mode: Mode): Promise<string> {
+export interface ScanOutput {
+  /** Full detailed report (for logs / terminal review) */
+  full: string;
+  /** Compact Telegram-friendly summary */
+  compact: string;
+  /** Report filename in logs/security/ */
+  filename: string;
+}
+
+export async function runSecurityScan(mode: Mode): Promise<ScanOutput> {
   console.log(`Security Sentinel — ${mode} scan starting...`);
   const start = Date.now();
 
@@ -475,7 +569,8 @@ export async function runSecurityScan(mode: Mode): Promise<string> {
   const filename = await saveReport(report);
   console.log(`Report saved: logs/security/${filename}`);
 
-  const formatted = formatReport(report, diff, report.ai_summary);
+  const full = formatReport(report, diff, report.ai_summary);
+  const compact = formatCompactTelegram(report, diff, filename, report.ai_summary);
 
   if (mode !== "scan") {
     const alert = formatTelegramAlert(report, diff);
@@ -485,7 +580,7 @@ export async function runSecurityScan(mode: Mode): Promise<string> {
     }
   }
 
-  return formatted;
+  return { full, compact, filename };
 }
 
 async function main() {
@@ -506,8 +601,8 @@ async function main() {
     return;
   }
 
-  const formatted = await runSecurityScan(mode);
-  console.log("\n" + formatted);
+  const output = await runSecurityScan(mode);
+  console.log("\n" + output.full);
 }
 
 // ============================================================
