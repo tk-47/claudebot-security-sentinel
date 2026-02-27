@@ -302,7 +302,9 @@ export async function runTruffleHog(): Promise<ScanResult[]> {
     try {
       const parsed = JSON.parse(line);
       const filePath = parsed?.SourceMetadata?.Data?.Filesystem?.file || "";
-      if (filePath.match(/^\.env(\.|$)/)) continue;
+      // Match .env files whether path is relative (.env) or absolute (/path/to/.env)
+      const baseName = filePath.split("/").pop() || "";
+      if (baseName.match(/^\.env(\.|$)/)) continue;
       secrets.push(parsed);
     } catch {}
   }
