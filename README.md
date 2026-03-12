@@ -554,6 +554,7 @@ All 12 CLI tools are open source. Security Sentinel disables telemetry by defaul
 
 **Never shared:** Source code, `.env` contents, API keys, SSH credentials, file contents. The `scan` mode makes zero external API calls. No tool ever uploads your source code or scan results to any third party.
 
+Initially developed for hardening GoBot for the Autonomee community.
 ---
 
 ## License
